@@ -1,12 +1,9 @@
 # -*- coding: utf-8 -*-
-"""
-B2B 가격 수집 설정 파일 (최종 통합 버전)
-"""
 import os
 
-# ========================================
-# 1. 사이트 기본 정보 (AdminPlus 계열 고정 데이터)
-# ========================================
+# =================================================================
+# 1. B2B 수집 대상 사이트 기본 정보 (AdminPlus 솔루션 계열)
+# =================================================================
 SITES = {
     '팡이농장': {'login_url': 'https://jaehwan0330.adminplus.co.kr/partner/?mod=product&actpage=prt.list', 'list_url': 'https://jaehwan0330.adminplus.co.kr/partner/?mod=product&actpage=prt.list', 'domain': 'jaehwan0330.adminplus.co.kr'},
     '최고집': {'login_url': 'https://zain0401.adminplus.co.kr/partner/?mod=product&actpage=prt.list', 'list_url': 'https://zain0401.adminplus.co.kr/partner/?mod=product&actpage=prt.list', 'domain': 'zain0401.adminplus.co.kr'},
@@ -22,50 +19,51 @@ SITES = {
     '더그린': {'login_url': 'https://gl1248.adminplus.co.kr/partner/?mod=product&actpage=prt.list', 'list_url': 'https://gl1248.adminplus.co.kr/partner/?mod=product&actpage=prt.list', 'domain': 'gl1248.adminplus.co.kr'},
 }
 
-# 공통 셀렉터 설정 자동 주입
+# 모든 사이트 공통 선택자 (로그인 및 상품 리스트)
 for s in SITES:
-    SITES[s]['selectors'] = {'username': '#memid', 'password': '#admpwd', 'login_button': 'button[type="submit"]'}
-    SITES[s]['product_selectors'] = {'item_container': 'div[onclick^="prtView"]', 'product_name': '.pname'}
-    SITES[s]['accounts'] = []
+    SITES[s]['selectors'] = {
+        'username': '#memid', 
+        'password': '#admpwd', 
+        'login_button': 'button[type="submit"]'
+    }
+    SITES[s]['product_selectors'] = {
+        'item_container': 'div[onclick^="prtView"]', 
+        'product_name': '.pname'
+    }
 
-# ========================================
-# 2. 계정 정보 지능형 로드 (accounts.txt 연동)
-# ========================================
-common_account = None
-specific_accounts = {}
+# =================================================================
+# 2. 구글 시트 연동 설정 (디렉터님이 주신 6개 시트 주소 통합)
+# =================================================================
+# URL 끝에 /export?format=csv&gid=숫자 형태를 붙여 로봇이 즉시 읽을 수 있게 합니다.
+GSHEETS = {
+    '업체1(p0WM)': {
+        'url': 'https://docs.google.com/spreadsheets/d/1p0WM4X2JztS1LfGKVdUXd3GTvBJJGYPNO0ya8ihfns4/export?format=csv&gid=1594213233',
+        'mapping': {'상품명': '상품명', '옵션명': '옵션', '공급가': '공급가', '배송비': '비고'}
+    },
+    '김통깨(특가행사)': {
+        'url': 'https://docs.google.com/spreadsheets/d/1WmoBoJJEgjyTNns-y4ditymdLT2Ygp0NvBG0nfL8a3g/export?format=csv&gid=1030436719',
+        'mapping': {'상품명': '상품명', '옵션명': '옵션', '공급가': '공급단가', '배송비': '택배사'}
+    },
+    '업체3(JUx1)': {
+        'url': 'https://docs.google.com/spreadsheets/d/1JUx1b2nxxGyl1SR5hITWfFLbjmIc_53D/export?format=csv&gid=625002004',
+        'mapping': {'상품명': '품목', '옵션명': '규격', '공급가': '단가', '배송비': '비고'}
+    },
+    '제이비티엠(농산물)': {
+        'url': 'https://docs.google.com/spreadsheets/d/1g0Bxmz773DqPjCfYgBNyBtlYKxYuLJYY2zasqiC5u7Y/export?format=csv&gid=1410862921',
+        'mapping': {'상품명': '품목', '옵션명': '옵션명', '공급가': '일반공급가', '배송비': '운임비'}
+    },
+    '업체5(bFfY)': {
+        'url': 'https://docs.google.com/spreadsheets/d/1bFfYmNNzPpIztK6_AD918Hu7s3JvaqkGGlwfIi6LxqY/export?format=csv&gid=322594718',
+        'mapping': {'상품명': '상품명', '옵션명': '옵션', '공급가': '공급가', '배송비': '비고'}
+    },
+    '웰그린푸드(국산과일)': {
+        'url': 'https://docs.google.com/spreadsheets/d/14DLy78orKYHYlmQOuO7Efg2OL-yvwjgo4bOpacw5vZ4/export?format=csv&gid=0',
+        'mapping': {'상품명': '제품명', '옵션명': '옵션', '공급가': '가장우측날짜'} # 컬럼명이 날짜면 마지막 열 선택
+    }
+}
 
-try:
-    with open('accounts.txt', 'r', encoding='utf-8') as f:
-        for line in f:
-            line = line.strip()
-            if not line or line.startswith('#'): continue
-            parts = [p.strip() for p in line.split(',')]
-            if len(parts) >= 4:
-                site, user, pw, grade = parts[0], parts[1], parts[2], parts[3]
-                if site.upper() == 'ALL':
-                    common_account = {'user': user, 'pw': pw, 'grade': grade}
-                else:
-                    if site not in SITES: continue
-                    if site not in specific_accounts: specific_accounts[site] = []
-                    specific_accounts[site].append({'user': user, 'pw': pw, 'grade': grade})
-
-    for site_name in SITES:
-        if site_name in specific_accounts:
-            SITES[site_name]['accounts'] = specific_accounts[site_name]
-        elif common_account:
-            SITES[site_name]['accounts'] = [common_account]
-    print(f"✅ 계정 설정 로드 완료")
-except Exception as e:
-    print(f"⚠️ 'accounts.txt' 로드 중 오류: {e}")
-
-# ========================================
-# 3. 수집 옵션 및 파일 경로
-# ========================================
-try:
-    with open('keywords.txt', 'r', encoding='utf-8') as f:
-        FILTER_KEYWORDS = [line.strip() for line in f if line.strip()]
-except:
-    FILTER_KEYWORDS = ['사과', '배', '복숭아']
-
-MAX_PAGES = 3
-PRICE_HISTORY_FILE = '가격이력.xlsx'
+# =================================================================
+# 3. 기타 설정
+# =================================================================
+MAX_PAGES = 2              # 검색 시 수집할 최대 페이지 수
+PRICE_HISTORY_FILE = '가격이력.xlsx'  # 결과 저장 파일명
