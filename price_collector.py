@@ -29,7 +29,7 @@ class B2BPriceCollector:
         service = Service(ChromeDriverManager().install())
         self.driver = webdriver.Chrome(service=service, options=options)
         
-        # 자동화 탐지 방지 스크립트
+        # 자동화 탐지 방지 스크립트 적용
         self.driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {
             "source": """
                 Object.defineProperty(navigator, 'webdriver', {
@@ -43,13 +43,16 @@ class B2BPriceCollector:
         self.MAX_ITEMS_PER_KW = 15 
 
     def load_keywords_from_gsheet(self, url):
+        """디렉터님의 마스터 시트에서 수집 대상 키워드 목록을 가져옵니다."""
         try:
             print("📜 [키워드] 마스터 시트 로드 중...")
             df = pd.read_csv(url, on_bad_lines='skip')
             col_name = df.columns[0]
             k_list = df[col_name].dropna().astype(str).tolist()
             return [k.strip() for k in k_list if k.strip()]
-        except: return None
+        except Exception as e:
+            print(f"⚠️ [키워드] 시트 로드 실패: {e}")
+            return None
 
     def login(self, site_name, login_url, username, password, selectors):
         """로그인 세션을 확실하게 잡기 위해 대기 로직을 강화했습니다."""
@@ -151,6 +154,7 @@ class B2BPriceCollector:
             print(f"⚠️ [{site_name}] 수집 중단: {e}")
 
     def collect_from_gsheet(self, name, conf, keywords):
+        """구글 시트 단가표에서 최신 날짜의 가격을 추출합니다."""
         try:
             print(f"📊 [{name}] 구글 시트 분석 중...")
             df = pd.read_csv(conf['url'], on_bad_lines='skip', header=None)
@@ -167,18 +171,23 @@ class B2BPriceCollector:
                 for k in keywords:
                     if k in p_name or k in o_name: matched = k; break
                 if not matched: continue 
+                
+                # 가격 컬럼(가장 우측 날짜) 자동 탐색
                 p_col = conf['mapping'].get('공급가', '공급가')
                 if p_col not in df.columns or p_col == '가장우측날짜':
                     for c in reversed(df.columns):
                         if any(x in str(c) for x in ['/', '.', '월', '공급가']): p_col = c; break
+                
                 price = str(r.get(p_col, ''))
                 if not p_name.strip() or not price.strip() or 'nan' in str(price).lower(): continue
+                
                 self.results.append({
                     '수집날짜': datetime.now().strftime('%Y-%m-%d %H:%M'),
                     '사이트명': name, '키워드': matched, '상품명': p_name.strip(), '옵션명': o_name.strip(),
                     '공급가': price.strip(), '재고': '시트참조', '배송비': '별도확인', '상세URL': conf['url'].split('/export')[0]
                 })
-        except: pass
+        except Exception as e:
+            print(f"❌ [{name}] 시트 분석 오류: {e}")
 
     def save_excel(self, filename):
         if self.results:
