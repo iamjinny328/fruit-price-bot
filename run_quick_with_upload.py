@@ -1,19 +1,26 @@
 # -*- coding: utf-8 -*-
 from price_collector import B2BPriceCollector
-from config import SITES, GSHEETS, PRICE_HISTORY_FILE
+from config import SITES, GSHEETS, PRICE_HISTORY_FILE, KEYWORD_MASTER_URL
 import os
 
 def main():
-    # 1. 키워드 목록 로드 (keywords.txt 파일 읽기)
-    try:
-        with open('keywords.txt', 'r', encoding='utf-8') as f:
-            keywords = [line.strip() for line in f if line.strip()]
-        print(f"✅ 수집 키워드 로드 완료: {', '.join(keywords)}")
-    except Exception as e:
-        print(f"⚠️ 키워드 파일을 읽을 수 없어 기본값(사과, 배)을 사용합니다: {e}")
-        keywords = ['사과', '배']
+    # 수집기 엔진 가동
+    collector = B2BPriceCollector()
+    
+    # 1. 키워드 로드 (디렉터님 개인 구글 시트에서 최우선적으로 읽어옵니다)
+    keywords = collector.load_keywords_from_gsheet(KEYWORD_MASTER_URL)
+    
+    # 만약 시트 연결에 실패할 경우를 대비한 백업 (기존 keywords.txt 사용)
+    if not keywords:
+        try:
+            print("⚠️ 시트 로딩 실패로 기존 keywords.txt 파일을 참조합니다.")
+            with open('keywords.txt', 'r', encoding='utf-8') as f:
+                keywords = [line.strip() for line in f if line.strip()]
+        except Exception as e:
+            print(f"⚠️ 키워드 파일을 찾을 수 없습니다. 기본값을 사용합니다: {e}")
+            keywords = ['사과', '참외', '토마토']
 
-    # 2. 계정 정보 로드 (accounts.txt 파일 읽기)
+    # 2. 계정 정보 로드 (accounts.txt)
     accounts = {}
     try:
         with open('accounts.txt', 'r', encoding='utf-8') as f:
@@ -23,21 +30,17 @@ def main():
                 parts = [p.strip() for p in line.split(',')]
                 if len(parts) >= 3:
                     site_key, user, pw = parts[0], parts[1], parts[2]
-                    # ALL 계정이면 모든 사이트에 할당, 아니면 특정 사이트에만 할당
+                    # ALL 계정 처리
                     if site_key.upper() == 'ALL':
                         for s in SITES:
                             accounts[s] = {'u': user, 'p': pw}
                     elif site_key in SITES:
                         accounts[site_key] = {'u': user, 'p': pw}
-        print(f"✅ 접속 계정 정보 로드 완료 (대상 사이트: {len(accounts)}곳)")
     except Exception as e:
-        print(f"⚠️ 계정 파일을 읽는 중 오류가 발생했습니다: {e}")
+        print(f"⚠️ 계정 정보를 읽는 중 오류가 발생했습니다: {e}")
 
-    # 3. 수집 엔진 가동
-    collector = B2BPriceCollector()
-    
     try:
-        # --- [1단계] B2B 사이트 로그인 및 상세 검색 수집 ---
+        # --- [1단계] B2B 사이트 상세 수집 가동 ---
         print("\n" + "="*50)
         print("🌐 1단계: B2B 웹사이트 상세 가격 수집 시작")
         print("="*50)
@@ -48,9 +51,9 @@ def main():
                 print(f"⏩ [{site_name}] 계정 정보가 없어 건너뜁니다.")
                 continue
             
-            # 로그인 시도
+            # 사이트 로그인 시도
             if collector.login(site_name, info['login_url'], acc['u'], acc['p'], info['selectors']):
-                # 키워드별로 검색 실행
+                # 디렉터님 시트에서 가져온 키워드별로 검색
                 for kw in keywords:
                     collector.collect_by_search(
                         site_name, 
@@ -59,12 +62,12 @@ def main():
                         info['product_selectors'], 
                         kw
                     )
-                # 다음 사이트 접속을 위해 쿠키 삭제
+                # 다음 사이트를 위해 쿠키 초기화
                 collector.driver.delete_all_cookies()
             else:
-                print(f"❌ [{site_name}] 로그인 실패로 인해 수집을 진행할 수 없습니다.")
+                print(f"❌ [{site_name}] 로그인 실패로 수집을 건너뜁니다.")
 
-        # --- [2단계] 구글 시트 단가표 연동 수집 ---
+        # --- [2단계] 타사 구글 시트 단가표 연동 가동 ---
         print("\n" + "="*50)
         print("📈 2단계: 구글 시트 단가표 데이터 연동 시작")
         print("="*50)
@@ -78,12 +81,12 @@ def main():
         print("="*50)
         
     except Exception as e:
-        print(f"❌ 수집 프로세스 도중 예상치 못한 오류 발생: {e}")
+        print(f"❌ 전체 수집 공정 중 오류 발생: {e}")
         
     finally:
-        # 브라우저 종료
+        # 브라우저 종료 및 로봇 퇴근
         collector.close()
-        print("\n👋 모든 작업을 마치고 로봇이 퇴근합니다. 수고하셨습니다!")
+        print("\n👋 모든 수집 작업이 성공적으로 종료되었습니다. 고생하셨습니다!")
 
 if __name__ == "__main__":
     main()
