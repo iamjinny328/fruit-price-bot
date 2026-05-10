@@ -8,13 +8,14 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         body { background-color: #f8f9fa; padding: 20px; }
-        .container { background: white; padding: 30px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        .container { background: white; padding: 30px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); max-width: 1200px; }
         .header-title { color: #2c3e50; margin-bottom: 25px; border-left: 5px solid #27ae60; padding-left: 15px; }
-        .search-box { margin-bottom: 20px; }
+        .filter-row { margin-bottom: 20px; background: #f1f3f5; padding: 15px; border-radius: 10px; }
         .table-responsive { max-height: 700px; overflow-y: auto; }
-        .price-up { color: #e74c3c; font-weight: bold; }
+        .price-up { color: #e74c3c; font-weight: bold; font-size: 1.1rem; }
         .badge-site { background-color: #3498db; }
         .badge-kw { background-color: #f39c12; }
+        .btn-refresh { white-space: nowrap; }
     </style>
 </head>
 <body>
@@ -22,62 +23,120 @@
 <div class="container">
     <h2 class="header-title">🍎 B2B 실시간 가격 비교 대시보드</h2>
     
-    <div class="row search-box">
-        <div class="col-md-8">
-            <input type="text" id="searchInput" class="form-control" placeholder="상품명 또는 업체명을 입력하세요 (예: 사과, 웰그린)">
-        </div>
+    <!-- 필터 영역 -->
+    <div class="row filter-row g-3">
         <div class="col-md-4">
-            <button onclick="loadData()" class="btn btn-success w-100">🔄 데이터 새로고침</button>
+            <label class="form-label fw-bold">🔍 통합 검색</label>
+            <input type="text" id="searchInput" class="form-control" placeholder="상품명 또는 상세내용 검색">
+        </div>
+        <div class="col-md-3">
+            <label class="form-label fw-bold">🏢 업체 필터</label>
+            <select id="siteFilter" class="form-select">
+                <option value="">모든 업체 보기</option>
+            </select>
+        </div>
+        <div class="col-md-3">
+            <label class="form-label fw-bold">🍇 품목 필터</label>
+            <select id="keywordFilter" class="form-select">
+                <option value="">모든 품목 보기</option>
+            </select>
+        </div>
+        <div class="col-md-2 d-flex align-items-end">
+            <button onclick="loadData()" class="btn btn-success w-100 btn-refresh">🔄 새로고침</button>
         </div>
     </div>
 
-    <div id="status" class="text-muted mb-2">데이터를 불러오는 중...</div>
+    <div id="status" class="text-muted mb-2 small">데이터를 불러오는 중...</div>
     
     <div class="table-responsive">
-        <table class="table table-hover">
+        <table class="table table-hover align-middle">
             <thead class="table-dark">
                 <tr>
                     <th>사이트</th>
                     <th>키워드</th>
                     <th>상품명 / 옵션</th>
-                    <th>공급가</th>
+                    <th class="text-end">공급가</th>
                     <th>배송비</th>
                     <th>수집시간</th>
                     <th>링크</th>
                 </tr>
             </thead>
             <tbody id="tableBody">
-                </tbody>
+                <!-- 데이터가 여기에 들어옵니다 -->
+            </tbody>
         </table>
     </div>
 </div>
 
 <script>
+    let allData = [];
+
     async function loadData() {
-        const url = '가격이력.xlsx?v=' + new Date().getTime(); // 캐시 방지
+        const url = '가격이력.xlsx?v=' + new Date().getTime(); 
         const status = document.getElementById('status');
         
         try {
             const response = await fetch(url);
-            if (!response.ok) throw new Error('파일을 찾을 수 없습니다. 수집이 완료되었는지 확인하세요.');
+            if (!response.ok) throw new Error('가격 데이터 파일이 아직 생성되지 않았습니다.');
             
             const arrayBuffer = await response.arrayBuffer();
             const data = new Uint8Array(arrayBuffer);
             const workbook = XLSX.read(data, {type: 'array'});
             
             const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-            const jsonData = XLSX.utils.sheet_to_json(firstSheet);
+            allData = XLSX.utils.sheet_to_json(firstSheet);
             
-            displayData(jsonData);
-            status.innerText = `총 ${jsonData.length}개의 데이터가 수집되었습니다.`;
+            initFilters(allData);
+            applyFilters();
+            status.innerText = `총 ${allData.length}개의 데이터가 로드되었습니다. (마지막 수집: ${allData[0]?.['수집날짜'] || '-'})`;
         } catch (error) {
             status.innerText = '오류: ' + error.message;
         }
     }
 
-    function displayData(data) {
+    // 데이터에서 사이트명과 키워드 목록을 뽑아 드롭다운 메뉴를 만듭니다.
+    function initFilters(data) {
+        const sites = [...new Set(data.map(item => item['사이트명']).filter(x => x))];
+        const keywords = [...new Set(data.map(item => item['키워드']).filter(x => x))];
+
+        const siteSelect = document.getElementById('siteFilter');
+        const kwSelect = document.getElementById('keywordFilter');
+
+        // 초기화
+        siteSelect.innerHTML = '<option value="">모든 업체 보기</option>';
+        kwSelect.innerHTML = '<option value="">모든 품목 보기</option>';
+
+        sites.sort().forEach(site => {
+            siteSelect.innerHTML += `<option value="${site}">${site}</option>`;
+        });
+        keywords.sort().forEach(kw => {
+            kwSelect.innerHTML += `<option value="${kw}">${kw}</option>`;
+        });
+    }
+
+    function applyFilters() {
+        const searchValue = document.getElementById('searchInput').value.toLowerCase();
+        const siteValue = document.getElementById('siteFilter').value;
+        const kwValue = document.getElementById('keywordFilter').value;
+        
+        const filtered = allData.filter(item => {
+            const matchSearch = (item['상품명'] + item['옵션명'] + item['사이트명']).toLowerCase().includes(searchValue);
+            const matchSite = siteValue === "" || item['사이트명'] === siteValue;
+            const matchKw = kwValue === "" || item['키워드'] === kwValue;
+            return matchSearch && matchSite && matchKw;
+        });
+
+        renderTable(filtered);
+    }
+
+    function renderTable(data) {
         const tableBody = document.getElementById('tableBody');
         tableBody.innerHTML = '';
+
+        if (data.length === 0) {
+            tableBody.innerHTML = '<tr><td colspan="7" class="text-center p-5 text-muted">조건에 맞는 데이터가 없습니다.</td></tr>';
+            return;
+        }
 
         data.forEach(item => {
             const row = `
@@ -85,28 +144,23 @@
                     <td><span class="badge badge-site">${item['사이트명'] || '-'}</span></td>
                     <td><span class="badge badge-kw">${item['키워드'] || '-'}</span></td>
                     <td>
-                        <strong>${item['상품명'] || '-'}</strong><br>
-                        <small class="text-muted">${item['옵션명'] || '-'}</small>
+                        <div class="fw-bold text-dark">${item['상품명'] || '-'}</div>
+                        <div class="text-muted small">${item['옵션명'] || '-'}</div>
                     </td>
-                    <td class="price-up">${item['공급가'] || '0'}</td>
+                    <td class="text-end price-up">${item['공급가'] || '0'}</td>
                     <td>${item['배송비'] || '-'}</td>
-                    <td><small>${item['수집날짜'] || '-'}</small></td>
-                    <td><a href="${item['상세URL']}" target="_blank" class="btn btn-sm btn-outline-primary">보기</a></td>
+                    <td><div class="small text-muted">${item['수집날짜'] || '-'}</div></td>
+                    <td><a href="${item['상세URL']}" target="_blank" class="btn btn-sm btn-outline-primary">이동</a></td>
                 </tr>
             `;
             tableBody.innerHTML += row;
         });
     }
 
-    // 실시간 검색 기능
-    document.getElementById('searchInput').addEventListener('keyup', function() {
-        const value = this.value.toLowerCase();
-        const rows = document.querySelectorAll('#tableBody tr');
-        
-        rows.forEach(row => {
-            row.style.display = row.innerText.toLowerCase().includes(value) ? '' : 'none';
-        });
-    });
+    // 이벤트 리스너 등록
+    document.getElementById('searchInput').addEventListener('input', applyFilters);
+    document.getElementById('siteFilter').addEventListener('change', applyFilters);
+    document.getElementById('keywordFilter').addEventListener('change', applyFilters);
 
     window.onload = loadData;
 </script>
