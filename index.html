@@ -3,183 +3,209 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>B2B 과일 가격 실시간 대시보드</title>
-    <!-- 엑셀 파일을 읽기 위한 라이브러리 -->
+    <title>🍎 B2B 과일 단가 실시간 대시보드 (PC버전)</title>
+    
+    <!-- 엑셀 데이터 파싱 라이브러리 -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <!-- 디자인을 위한 부트스트랩 CSS -->
+    
+    <!-- Bootstrap 5 CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- DataTables CSS (PC형 그리드 핵심 라이브러리) -->
+    <link href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css" rel="stylesheet">
+    
     <style>
-        body { background-color: #f8f9fa; padding: 20px; font-family: 'Pretendard', -apple-system, sans-serif; }
-        .container { background: white; padding: 30px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); max-width: 1400px; }
-        .header-title { color: #2c3e50; margin-bottom: 25px; border-left: 5px solid #27ae60; padding-left: 15px; font-weight: 800; }
-        .filter-row { margin-bottom: 20px; background: #f1f3f5; padding: 20px; border-radius: 12px; }
-        .table-responsive { max-height: 750px; overflow-y: auto; border: 1px solid #dee2e6; border-radius: 8px; }
-        .price-up { color: #e74c3c; font-weight: 800; font-size: 1.15rem; }
-        .badge-site { background-color: #3498db; font-size: 0.85rem; padding: 6px 10px; }
-        .badge-kw { background-color: #f39c12; font-size: 0.85rem; padding: 6px 10px; }
-        th { position: sticky; top: 0; background: #212529 !important; color: white; z-index: 10; text-align: center; }
-        td { border-bottom: 1px solid #eee; text-align: center; }
-        .text-start { text-align: left !important; }
-        .text-end { text-align: right !important; }
+        body { background-color: #f4f6f9; font-family: 'Malgun Gothic', '맑은 고딕', sans-serif; font-size: 14px; }
+        .dashboard-container { background: #ffffff; padding: 25px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); margin: 20px auto; max-width: 1600px; border-top: 5px solid #28a745; }
+        .header-title { font-weight: 800; color: #343a40; font-size: 24px; }
+        .filter-box { background: #f8f9fa; padding: 15px; border-radius: 6px; border: 1px solid #e9ecef; margin-bottom: 20px; }
+        
+        /* 테이블 스타일링 */
+        table.dataTable { border-collapse: collapse !important; width: 100% !important; }
+        table.dataTable thead th { background-color: #343a40; color: white; padding: 12px; font-weight: 600; text-align: center; border-bottom: none; }
+        table.dataTable tbody td { vertical-align: middle; padding: 10px; border-bottom: 1px solid #e9ecef; }
+        table.dataTable tbody tr:hover { background-color: #f1f8ff; }
+        
+        /* 뱃지 및 강조 */
+        .site-badge { background-color: #e9ecef; color: #495057; padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 12px; border: 1px solid #ced4da; }
+        .kw-badge { background-color: #fff3cd; color: #856404; padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 12px; border: 1px solid #ffeeba; }
+        .price-text { color: #dc3545; font-weight: 900; font-size: 15px; text-align: right; }
+        .btn-link-custom { background-color: #007bff; color: white; padding: 4px 10px; text-decoration: none; border-radius: 4px; font-size: 12px; font-weight: bold; }
+        .btn-link-custom:hover { background-color: #0056b3; color: white; }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <h2 class="header-title">🍎 B2B 실시간 가격 비교 대시보드</h2>
-    
-    <!-- 필터 및 검색 영역 -->
-    <div class="row filter-row g-3">
-        <div class="col-md-4">
-            <label class="form-label fw-bold">🔍 통합 검색</label>
-            <input type="text" id="searchInput" class="form-control" placeholder="상품명 또는 상세내용 검색">
-        </div>
-        <div class="col-md-3">
-            <label class="form-label fw-bold">🏢 업체 필터</label>
-            <select id="siteFilter" class="form-select">
-                <option value="">모든 업체 보기</option>
-            </select>
-        </div>
-        <div class="col-md-3">
-            <label class="form-label fw-bold">🍇 품목 필터</label>
-            <select id="keywordFilter" class="form-select">
-                <option value="">모든 품목 보기</option>
-            </select>
-        </div>
-        <div class="col-md-2 d-flex align-items-end">
-            <button onclick="loadData()" class="btn btn-success w-100 fw-bold">🔄 새로고침</button>
+<div class="dashboard-container">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="header-title">🍎 B2B 통합 과일 단가표</h1>
+        <div class="text-end">
+            <span class="text-muted fw-bold me-3" id="lastUpdated">업데이트 시간 불러오는 중...</span>
+            <button onclick="location.reload()" class="btn btn-success btn-sm fw-bold px-3">🔄 새로고침</button>
         </div>
     </div>
 
-    <!-- 상태 및 수량 표시 -->
-    <div id="status" class="alert alert-info py-2 d-flex justify-content-between align-items-center mb-3">
-        <span id="loadTime">데이터 로딩 중...</span>
-        <span id="countSummary" class="badge bg-dark"></span>
+    <!-- 커스텀 필터 영역 -->
+    <div class="filter-box row g-3 align-items-end">
+        <div class="col-md-3">
+            <label class="form-label fw-bold text-secondary mb-1">🏢 거래처 필터</label>
+            <select id="filter-site" class="form-select form-select-sm fw-bold">
+                <option value="">모든 거래처</option>
+            </select>
+        </div>
+        <div class="col-md-3">
+            <label class="form-label fw-bold text-secondary mb-1">🍇 품목 필터</label>
+            <select id="filter-keyword" class="form-select form-select-sm fw-bold">
+                <option value="">모든 품목</option>
+            </select>
+        </div>
+        <div class="col-md-6 text-end">
+            <p class="mb-0 text-primary fw-bold" style="font-size: 13px;">※ 테이블 열(Column) 제목을 클릭하면 가격순, 가나다순으로 자동 정렬됩니다.</p>
+        </div>
     </div>
-    
-    <div class="table-responsive">
-        <table class="table table-hover align-middle mb-0">
-            <thead class="table-dark">
-                <tr>
-                    <th style="width: 140px;">사이트</th>
-                    <th style="width: 100px;">키워드</th>
-                    <th class="text-start">상품명 / 옵션 상세</th>
-                    <th class="text-end" style="width: 130px;">공급가</th>
-                    <th style="width: 120px;">배송비</th>
-                    <th style="width: 160px;">수집시간</th>
-                    <th style="width: 80px;">링크</th>
-                </tr>
-            </thead>
-            <tbody id="tableBody">
-                <!-- 로봇이 수집한 데이터가 여기에 나타납니다 -->
-            </tbody>
-        </table>
-    </div>
+
+    <!-- 데이터 테이블 -->
+    <table id="priceTable" class="table table-bordered table-striped" style="width:100%">
+        <thead>
+            <tr>
+                <th style="width: 12%;">거래처 (탭)</th>
+                <th style="width: 8%;">품목</th>
+                <th style="width: 25%;">상품명</th>
+                <th style="width: 15%;">상세/옵션</th>
+                <th style="width: 10%;">공급가(원)</th>
+                <th style="width: 8%;">배송비</th>
+                <th style="width: 12%;">수집시간</th>
+                <th style="width: 10%;">바로가기</th>
+            </tr>
+        </thead>
+        <tbody id="tableBody">
+            <!-- 데이터 로딩 중 표시 -->
+            <tr><td colspan="8" class="text-center py-5 fw-bold text-muted">데이터를 엑셀에서 불러오고 있습니다...</td></tr>
+        </tbody>
+    </table>
 </div>
 
-<script>
-    let allData = [];
+<!-- jQuery 및 DataTables JS -->
+<script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
 
-    // 엑셀 데이터를 불러오는 함수
-    async function loadData() {
-        const url = '가격이력.xlsx?v=' + new Date().getTime(); // 캐시 방지
-        const loadTime = document.getElementById('loadTime');
+<script>
+    let tableInstance = null;
+
+    async function loadExcelData() {
+        // 캐시 방지용 쿼리스트링 추가 (항상 최신 데이터를 불러옴)
+        const fileUrl = '가격이력.xlsx?v=' + new Date().getTime(); 
         
         try {
-            const response = await fetch(url);
-            if (!response.ok) throw new Error('가격 데이터 파일이 아직 없습니다. 수집을 먼저 실행해 주세요.');
+            const response = await fetch(fileUrl);
+            if (!response.ok) throw new Error("엑셀 파일을 찾을 수 없습니다.");
             
             const arrayBuffer = await response.arrayBuffer();
             const data = new Uint8Array(arrayBuffer);
             const workbook = XLSX.read(data, {type: 'array'});
             
-            const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-            allData = XLSX.utils.sheet_to_json(firstSheet);
+            // 첫 번째 시트 데이터 가져오기
+            const firstSheetName = workbook.SheetNames[0];
+            const jsonData = XLSX.utils.sheet_to_json(workbook.Sheets[firstSheetName]);
             
-            // 최신 날짜순으로 정렬
-            allData.sort((a, b) => new Date(b['수집날짜']) - new Date(a['수집날짜']));
-
-            initFilters(allData);
-            applyFilters();
+            renderData(jsonData);
             
-            loadTime.innerText = `마지막 수집 완료: ${allData[0]?.['수집날짜'] || '-'}`;
         } catch (error) {
-            loadTime.innerText = '오류: ' + error.message;
+            console.error(error);
+            document.getElementById('tableBody').innerHTML = 
+                `<tr><td colspan="8" class="text-center text-danger py-5 fw-bold">데이터를 불러오는 데 실패했습니다.<br>수집 로봇이 엑셀 파일을 정상적으로 생성했는지 확인해 주세요.</td></tr>`;
         }
     }
 
-    // 데이터에서 업체와 품목 목록을 뽑아 필터 메뉴 생성
-    function initFilters(data) {
-        const sites = [...new Set(data.map(item => item['사이트명']).filter(x => x))].sort();
-        const keywords = [...new Set(data.map(item => item['키워드']).filter(x => x))].sort();
+    function renderData(data) {
+        const tbody = document.getElementById('tableBody');
+        tbody.innerHTML = ''; // 초기화
 
-        const siteSelect = document.getElementById('siteFilter');
-        const kwSelect = document.getElementById('keywordFilter');
+        const siteSet = new Set();
+        const kwSet = new Set();
 
-        siteSelect.innerHTML = '<option value="">모든 업체 보기</option>';
-        kwSelect.innerHTML = '<option value="">모든 품목 보기</option>';
+        data.forEach(row => {
+            const site = row['사이트명'] || '-';
+            const kw = row['키워드'] || '-';
+            const name = row['상품명'] || '-';
+            const option = row['옵션명'] || '-';
+            const rawPrice = row['공급가'] || '0';
+            const ship = row['배송비'] || '-';
+            const time = row['수집날짜'] || '-';
+            const url = row['상세URL'] || '#';
 
-        sites.forEach(site => siteSelect.innerHTML += `<option value="${site}">${site}</option>`);
-        keywords.forEach(kw => kwSelect.innerHTML += `<option value="${kw}">${kw}</option>`);
-    }
+            // 가격 쉼표 포맷팅 (숫자만 있는 경우)
+            let formattedPrice = rawPrice;
+            const priceNum = rawPrice.toString().replace(/[^0-9]/g, '');
+            if(priceNum.length > 0 && rawPrice.toString().length < 15) {
+                formattedPrice = parseInt(priceNum).toLocaleString();
+            }
 
-    // 필터 조건에 맞게 데이터를 걸러내는 함수
-    function applyFilters() {
-        const searchValue = document.getElementById('searchInput').value.toLowerCase();
-        const siteValue = document.getElementById('siteFilter').value;
-        const kwValue = document.getElementById('keywordFilter').value;
-        
-        const filtered = allData.filter(item => {
-            const text = (String(item['상품명'] || '') + String(item['옵션명'] || '') + String(item['사이트명'] || '')).toLowerCase();
-            const matchSearch = text.includes(searchValue);
-            const matchSite = siteValue === "" || item['사이트명'] === siteValue;
-            const matchKw = kwValue === "" || item['키워드'] === kwValue;
-            return matchSearch && matchSite && matchKw;
-        });
+            siteSet.add(site);
+            kwSet.add(kw);
 
-        document.getElementById('countSummary').innerText = `결과: ${filtered.length}건 / 전체: ${allData.length}건`;
-        renderTable(filtered);
-    }
-
-    // 테이블에 데이터를 실제로 그리는 함수
-    function renderTable(data) {
-        const tableBody = document.getElementById('tableBody');
-        
-        if (data.length === 0) {
-            tableBody.innerHTML = '<tr><td colspan="7" class="text-center p-5 text-muted">일치하는 상품이 없습니다.</td></tr>';
-            return;
-        }
-
-        let html = "";
-        data.forEach(item => {
-            // 가격 숫자 포맷팅
-            const price = Number(String(item['공급가'] || 0).replace(/[^0-9]/g, '')).toLocaleString();
-            
-            html += `
-                <tr>
-                    <td><span class="badge badge-site">${item['사이트명'] || '-'}</span></td>
-                    <td><span class="badge badge-kw">${item['키워드'] || '-'}</span></td>
-                    <td class="text-start">
-                        <div class="fw-bold text-dark">${item['상품명'] || '-'}</div>
-                        <div class="text-muted small">${item['옵션명'] || '-'}</div>
-                    </td>
-                    <td class="text-end price-up">${price}원</td>
-                    <td>${item['배송비'] || '-'}</td>
-                    <td><div class="small text-muted">${item['수집날짜'] || '-'}</div></td>
-                    <td><a href="${item['상세URL']}" target="_blank" class="btn btn-sm btn-outline-primary">링크</a></td>
-                </tr>
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td class="text-center"><span class="site-badge">${site}</span></td>
+                <td class="text-center"><span class="kw-badge">${kw}</span></td>
+                <td class="fw-bold">${name}</td>
+                <td class="text-muted" style="font-size: 12px;">${option}</td>
+                <td class="price-text" data-order="${priceNum}">${formattedPrice}</td>
+                <td class="text-center text-muted">${ship}</td>
+                <td class="text-center text-muted" style="font-size: 12px;">${time}</td>
+                <td class="text-center"><a href="${url}" target="_blank" class="btn-link-custom">상품 이동</a></td>
             `;
+            tbody.appendChild(tr);
         });
-        tableBody.innerHTML = html;
+
+        // 마지막 업데이트 시간 표시
+        if (data.length > 0 && data[0]['수집날짜']) {
+            document.getElementById('lastUpdated').innerText = `최근 수집: ${data[0]['수집날짜']}`;
+        }
+
+        // 필터 드롭다운 채우기
+        const siteFilter = document.getElementById('filter-site');
+        const kwFilter = document.getElementById('filter-keyword');
+        
+        Array.from(siteSet).sort().forEach(s => siteFilter.innerHTML += `<option value="${s}">${s}</option>`);
+        Array.from(kwSet).sort().forEach(k => kwFilter.innerHTML += `<option value="${k}">${k}</option>`);
+
+        // DataTables 초기화 (기존에 있으면 삭제 후 재성성)
+        if (tableInstance) {
+            tableInstance.destroy();
+        }
+        
+        tableInstance = $('#priceTable').DataTable({
+            language: {
+                search: "🔍 빠른 검색:",
+                lengthMenu: "_MENU_ 개씩 보기",
+                info: "총 _TOTAL_건의 상품 중 _START_ ~ _END_ 표시",
+                infoEmpty: "데이터가 없습니다.",
+                paginate: { first: "처음", last: "마지막", next: "다음", previous: "이전" },
+                zeroRecords: "검색 결과가 없습니다."
+            },
+            order: [[6, "desc"]], // 수집시간 기준 최신순 정렬 (기본값)
+            pageLength: 50, // 한 페이지에 50개 표시
+            lengthMenu: [25, 50, 100, 300, -1], // 보기 옵션 추가
+            columnDefs: [
+                { orderable: false, targets: 7 } // 바로가기 버튼 열은 정렬 비활성화
+            ]
+        });
+
+        // 커스텀 드롭다운 필터 이벤트 연결
+        $('#filter-site').on('change', function() {
+            tableInstance.column(0).search(this.value).draw();
+        });
+        
+        $('#filter-keyword').on('change', function() {
+            tableInstance.column(1).search(this.value).draw();
+        });
     }
 
-    // 입력 및 변경 이벤트 연결
-    document.getElementById('searchInput').addEventListener('input', applyFilters);
-    document.getElementById('siteFilter').addEventListener('change', applyFilters);
-    document.getElementById('keywordFilter').addEventListener('change', applyFilters);
+    // 페이지 로드 시 엑셀 불러오기 실행
+    window.onload = loadExcelData;
 
-    window.onload = loadData;
 </script>
-
 </body>
 </html>
